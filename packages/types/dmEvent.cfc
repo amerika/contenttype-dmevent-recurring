@@ -47,28 +47,30 @@
 	
 	<cffunction name="afterSave" access="public" output="true" returntype="struct">
 		<cfargument name="stProperties" type="struct" required="true" />
-
-		<cfset var bHasChilds = application.fapi.getContentObjects(typename="dmEvent", masterID_eq=arguments.stProperties.objectID).recordCount GT 0 />
 		
 		<!--- Only run on events that are set to recurring and when status change from draft to approved --->
-		<cfif (arguments.stProperties.recurringSetting IS NOT "") AND
+		<cfif (trim(arguments.stProperties.recurringSetting) IS NOT "") AND
 			  (arguments.previousStatus IS "draft" AND arguments.stProperties.status IS 'approved')>
+			  
+			<cfset bHasChilds = application.fapi.getContentObjects(typename="dmEvent", masterID_eq=arguments.stProperties.objectID).recordCount GT 0 />
 			
 			<!--- MASTER
 			//////////////////////////////////////////////////////////////////////////////////////////////////////////////////// --->
-			<cfif arguments.stProperties.masterID IS "">
+			<cfif trim(arguments.stProperties.masterID) EQ "">
 				<!--- Create childs --->
 				<cfif bHasChilds IS false>
 					<cfset stCreateChilds = createChilds(argumentCollection=arguments) />
 				<cfelse>
-					<cfset stUpdateAll = updateAll(argumentCollection=arguments, bExcludeMaster=true) />
+					<cfset stUpdateAll = updateAll(argumentCollection=arguments, bIncludeMaster=false) />
 				</cfif>
+			<cfelseif trim(arguments.stProperties.masterID) NEQ "">
+				<!--- CHILD
+				//////////////////////////////////////////////////////////////////////////////////////////////////////////////////// --->
+				<cfset stUpdateAll = updateAll(argumentCollection=arguments, bIncludeMaster=true) />
 			</cfif>
-		<cfelse>
-			<!--- CHILD
-			//////////////////////////////////////////////////////////////////////////////////////////////////////////////////// --->
-			<cfset stUpdateAll = updateAll(argumentCollection=arguments, bExcludeMaster=false) />
 		</cfif>
+		
+		
 		
 		<cfset stSuper = super.afterSave(stProperties=arguments.stProperties) />
 		
@@ -80,7 +82,6 @@
 		
 		<cfset var loopDate = arguments.stProperties.startDate />
 		<cfset var counter = 0 />
-		<cfset var aRecurringDates = arrayNew(1) />
 		<cfset var stMasterCopyObj = duplicate(arguments.stProperties) />
 		<cfset stMasterCopyObj.masterID = arguments.stProperties.objectID />
 		
@@ -107,61 +108,35 @@
 			<cfset stMasterCopyObj.startDate = stDates.loopStartDate />
 			<cfset stMasterCopyObj.endDate = stDates.loopEndDate />
 			<cfset stMasterCopyObj.objectID = createUUID() />
-			<cfset stSave = application.fapi.setData(stProperties=stMasterCopyObj) />
-			<!--- Add dates to date array --->
-			<cfset arrayAppend(aRecurringDates, stMasterCopyObj) />
+			<cfset stSave = application.fapi.setData(stProperties=stMasterCopyObj, bAfterSave=false) />
 		</cfloop>
 		
 	</cffunction>
 	
-	<cffunction name="updateAll" access="public" output="true" returntype="struct">
+	<cffunction name="updateAll" access="public" output="true" returntype="any">
 		<cfargument name="stProperties" type="struct" required="true" />
-		<cfargument name="bExcludeMaster" type="boolean" required="true" default="0" />
+		<cfargument name="bIncludeMaster" type="boolean" required="true" default="false" />
 		
-		<cfset var loopDate = arguments.stProperties.startDate />
-		<cfset var counter = 0 />
-		<cfset var aRecurringDates = arrayNew(1) />
-		<cfset var bHasChilds = application.fapi.getContentObjects(typename="dmEvent", masterID=arguments.stProperties.objectID).recordCount />
-		<cfdump var="#arguments#" />
-		<!--- MASTER
-		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////// --->
-		<!--- Only run on events that are set to recurring and when status change from draft to approved --->
-		<cfif (arguments.stProperties.recurringSetting IS NOT "") AND
-			  (arguments.previousStatus IS "draft" AND arguments.stProperties.status IS 'approved')>
-			<!--- 
-			yyyy: Year (et år)
-			m: Month (en måned)
-			d: Day (en dag)
-			ww: Week (en uke)
-			--->
-			<!--- TODO: Sjekk om datoen har flyttet på seg, hvis den har det må man kjøre dateAdd på alle child elementer --->
-			<!--- TODO: Slett alle fremtidige, må endre på master sin recurringEndDate --->
-			
-			<!--- TODO: Kalkuler hva recurringEndDate er hvis den ikke er satt --->
-			
-			<!--- TODO: Loop helt til loopDate er større enn recurringEndDate, eller maks 100 ganger --->
-			<cfloop from="1" to="100" index="i">
-				<cfset counter = counter + 1 />
-				<cfset loopDate = dateAdd(arguments.stProperties.recurringSetting, counter, arguments.stProperties.startDate) />
-				<cfif isDate(arguments.stProperties.recurringEndDate) AND dateCompare(loopDate, arguments.stProperties.recurringEndDate, 'd') GTE 1>
-					<!--- TODO: Oppdater recurringEndDate hvis den ikke er lik siste loopDate --->
-					<cfbreak />
-				</cfif>
-				<cfset arrayAppend(aRecurringDates, "#loopDate#") />
-				<cfoutput>#lsDateFormat(loopDate, "dd. mmmm yyyy")# - #lsDateFormat(loopDate, "dddd")#<br/></cfoutput>
-			</cfloop>
-			
-			<cfdump var="#aRecurringDates#" />
-			<cfabort />
+		<cfset var qObjUpdate = queryNew("blah") />
+		<cfset var masterObjID = "" />
+		
+		<cfif trim(arguments.stProperties.masterID) EQ "">
+			<cfset masterObjID = arguments.stProperties.objectID />
+		<cfelse>
+			<cfset masterObjID = arguments.stProperties.masterID />
 		</cfif>
+
+		<cfquery name="qObjUpdate" datasource="#application.dsn#">
+			UPDATE dmEvent
+			SET label = '#arguments.stProperties.label#', title = '#arguments.stProperties.title#'
+			WHERE masterID = '#masterObjID#'
+			<cfif arguments.bIncludeMaster>
+				OR objectID = '#masterObjID#'
+			</cfif>
+		</cfquery>
 		
-		<!--- CHILD
-		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////// --->
-		<!--- TODO: Sjekk om denne tilhører et master object, hvis det er endringer på dato skal masterID fjernes, det samme med  --->
+		<cfset application.fapi.flushCache('dmEvent') />
 		
-		<cfset stSuper = super.afterSave(stProperties=arguments.stProperties) />
-		
-		<cfreturn stSuper />
 	</cffunction>
 	
 </cfcomponent>
