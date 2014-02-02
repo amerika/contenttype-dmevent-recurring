@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<webtop>
+	<section id="content" mergeType="merge">
+			<subsection id="farcrycmssubsection" mergeType="merge">
+				<menu id="farcrycmsmenu" mergeType="merge">
+					<menuitem id="listdmevent" mergeType="merge" link="/admin/customadmin.cfm?module=dmEvent.cfm" />
+				</menu>
+			</subsection>
+		</section>
+</webtop>
