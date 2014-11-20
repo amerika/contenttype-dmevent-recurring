@@ -1,4 +1,7 @@
-contenttype-dmevent-recurring
+dmEvent (recurring)
 =============================
 
-Utvidelse av dmEvent med støtte for gjentakende eventer
+Extends dmEvent with support for recurring events
+
+## Installation
+Copy files to your FarCry project
